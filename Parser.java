@@ -1,19 +1,23 @@
 /** Parser for Assignment 2 */
-
+/**
+ * Taken from Piazza resources zip file for solutions to previous assignments.
+ */
 import java.io.*;
 import java.util.*;
 
-/** Class that represented parsing errors. */
+/** Exception class for representing parsing errors. */
 class ParseException extends RuntimeException {
   ParseException(String s) { super(s); }
-  ParseException(Throwable t) { super(t); }
 }
 
+/** A parser class for Jam.  Each program requires a separate parser object. */
 class Parser {
   
   private Lexer in;
   
-  Parser(Lexer i) { in = i; }
+  Parser(Lexer i) {
+    in = i;
+  }
   
   Parser(Reader inputStream) { this(new Lexer(inputStream)); }
   
@@ -23,29 +27,12 @@ class Parser {
   
   public void initParser() { }
   
-  /** Parses the program in the Lexer associated with this. */
   public AST parse() throws ParseException {
-    try {
-      in.reset();
-      AST prog = parseExp();
-      Token t = in.readToken();
-      if (t == EndOfFile.ONLY) return prog;
-      else throw new ParseException("Legal program followed by extra token " + t);
-    } 
-    finally {
-      try { in.rdr.close(); } 
-      catch (IOException e) { throw new ParseException(e); }
-    }
-  }
-  
-  /** Parses and syntactically checks the program in the Lexer associated with this. */
-  public AST parseAndCheck() throws ParseException {
     AST prog = parseExp();
     Token t = in.readToken();
-    if (t != EndOfFile.ONLY) throw new ParseException("Legal program '" + prog + "'followed by extra token " + t);
-    
-    prog.accept(CheckVisitor.INITIAL);   // aborts on an error by throwing an exception
-    return prog;
+    if (t == null) return prog;
+    else throw
+      new ParseException("Legal program followed by extra token " + t);
   }
   
   /** Parses:
@@ -56,22 +43,20 @@ class Parser {
     */
   private AST parseExp() {
     Token token = in.readToken();
-    
+
     if (token == Lexer.IF) return parseIf();
 //    if (token == Lexer.LETREC) return parseLetRec();  // supports addition of letrec
     if (token == Lexer.LET) return parseLet();
     if (token == Lexer.MAP) return parseMap();
     
     /*  Supports the addition of blocks to Jam */
-//    if (token == LeftBrace.ONLY) {
-//      AST[] exps = parseExps(SemiColon.ONLY,RightBrace.ONLY);  
-//      // including closing brace
-//      if (exps.length == 0) throw new ParseException("Illegal empty block");
-//      return new Block(exps);
-//    }
-    
-    /* Note: the code for the class Block is not included in AST.java */
-    
+    if (token == LeftBrace.ONLY) {
+      AST[] exps = parseExps(SemiColon.ONLY,RightBrace.ONLY);  
+      // including closing brace
+      if (exps.length == 0) throw new ParseException("Illegal empty block");
+      return new Block(exps);
+    }
+
     /* phrase begin with a term */
     AST exp = parseTerm(token);
     
@@ -90,12 +75,12 @@ class Parser {
   }
   
   /** Parses:
-    *   <term>     ::= { <unop> } <term> | <constant> | <factor> {( <exp-list> )}
-    *   <constant> ::= <null> | <int> | <bool>
+    *  <term>     ::= { <unop> } <term> | <constant> | <factor> {( <exp-list> )}
+    *  <constant> ::= <null> | <int> | <bool>
     * @param token   first token in input stream to be parsed; remainder in Lexer named in.
     */
   private AST parseTerm(Token token) {
-    
+
     if (token instanceof OpToken) {
       OpToken op = (OpToken) token;
       if (! op.isUnOp()) error(op,"unary operator");
@@ -103,7 +88,6 @@ class Parser {
     }
     
     if (token instanceof Constant) return (Constant) token;
-    
     AST factor = parseFactor(token);
     Token next = in.peek();
     if (next == LeftParen.ONLY) {
@@ -114,13 +98,15 @@ class Parser {
     return factor;
   }
   
-  /** Parses:  <factor>   ::= <prim> | <variable> | ( <exp> )
+  /** Parses:
+    *  <factor>   ::= <prim> | <variable> | ( <exp> )
     * @param token   first token in input stream to be parsed; remainder in Lexer named in.
     */
   private AST parseFactor(Token token) {
     
-    if (token == LeftParen.ONLY) { 
-      /* Parse a parenthesized expression */
+//    System.err.println("parseFactor(" + token + ") called");
+    
+    if (token == LeftParen.ONLY) {
       AST exp = parseExp();
       token = in.readToken();
       if (token != RightParen.ONLY) error(token,"`)'");
@@ -130,7 +116,7 @@ class Parser {
     if (! (token instanceof PrimFun) && ! (token instanceof Variable))
       error(token,"constant, primitive, variable, or `('");
     
-    // Term = Variable or PrimFun       
+    // Term\Constant = Variable or PrimFun       
     return (Term) token;
   }      
   
@@ -147,7 +133,7 @@ class Parser {
     return new If(test,conseq,alt);
   }
   
-  
+    
   /** Parses `let <prop-def-list> in <exp>' given that `let' has already been read. */ 
   private AST parseLet() {
     Def[] defs = parseDefs(false); 
@@ -168,7 +154,7 @@ class Parser {
   
   /* Parses `map <id-list> to <exp>' given that `map' has already been read. */
   private AST parseMap() {
-    
+
     Variable[] vars = parseVars(); // consumes the delimiter `to'
     AST body = parseExp();
     return new Map(vars, body);
@@ -209,17 +195,17 @@ class Parser {
     *  NOTE: consumes `to' following <id-list>
     */
   private Variable[] parseVars() {
-    
+ 
     LinkedList<Variable> vars = new LinkedList<Variable>();
     Token t = in.readToken();
     if (t == Lexer.TO) return new Variable[0];
     
     do {
-      if (! (t instanceof Variable)) error(t,"variable");
+      if (! (t instanceof Variable)) error(t, "variable");
       vars.addLast((Variable)t);
       t = in.readToken();
       if (t == Lexer.TO) break; 
-      if (t != Comma.ONLY) error(t, "`to' or `, '");
+      if (t != Comma.ONLY) error(t, "'to' or ',' ");
       // Comma found, read next variable
       t = in.readToken();
     } while (true);

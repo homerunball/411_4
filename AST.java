@@ -1,7 +1,4 @@
-/* The file defining the AST classes including the visitor interface, except for AST classes that are Token classes 
- * as well. */
-
-/** AST ::= BoolConstant | IntConstant | NullConstant | Variable | PrimFun | UnOpApp | BinOpApp | App | Map | If | Let */
+/** AST ::= BoolConstant | IntConstant | JamEmpty | Variable | PrimFun | UnOpApp | BinOpApp | App | Map | If | Let */
 
 /** AST class definitions */
 
@@ -14,6 +11,7 @@ interface ASTVisitor<ResType> {
   ResType forBoolConstant(BoolConstant b);
   ResType forIntConstant(IntConstant i);
   ResType forNullConstant(NullConstant n);
+  ResType forJamEmpty(JamEmpty je);
   ResType forVariable(Variable v);
   ResType forPrimFun(PrimFun f);
   ResType forUnOpApp(UnOpApp u);
@@ -22,6 +20,7 @@ interface ASTVisitor<ResType> {
   ResType forMap(Map m);
   ResType forIf(If i);
   ResType forLet(Let l);
+  ResType forBlock(Block b);
 }
 
 /* The Term interface correspond to AST's that when output as concrete syntax by toString() can be used as terms 
@@ -31,7 +30,7 @@ interface ASTVisitor<ResType> {
 interface Term extends AST {}
 
 /* NOTE: all Constant objects belong to the types Token and AST; Constant tokens evaluate to themselves.
- * The variant classes (IntConstant, BoolConstant, NullConstant) are defined in the file ValuesTokens.java */
+ * The variant classes (IntConstant, BoolConstant, JamEmpty) are defined in the file  ValuesTokens.java */
 
 /** Constant ::= IntConstant | BoolConstant | NullConstant */
 interface Constant extends Term {}
@@ -50,8 +49,8 @@ interface UnOpVisitor<ResType> {
   ResType forUnOpPlus(UnOpPlus op);
   ResType forUnOpMinus(UnOpMinus op);
   ResType forOpTilde(OpTilde op);
-  // ResType forOpBang(OpBang op);  // Supports ref cell extension to Jam
-  // ResType forOpRef(OpRef op);    // Supports ref cell extension to Jam
+   ResType forOpBang(OpBang op);  // Supports ref cell extension to Jam
+   ResType forOpRef(OpRef op);    // Supports ref cell extension to Jam
 }
 
 /** BinOp ::= BinOpPlus | BinOpMinus | OpTimes | OpDivide | OpEquals | OpNotEquals | OpLessThan | OpGreaterThan |
@@ -79,7 +78,7 @@ interface BinOpVisitor<ResType> {
   ResType forOpGreaterThanEquals(OpGreaterThanEquals op);
   ResType forOpAnd(OpAnd op);
   ResType forOpOr(OpOr op);
-  // ResType forOpGets(OpGets op);  // Supports the ref cell extension to Jam
+  ResType forOpGets(OpGets op);  // Supports the ref cell extension to Jam
 }
 
 class UnOpPlus extends UnOp {
@@ -106,7 +105,7 @@ class OpTilde extends UnOp {
   }
 }
 
-/*  Supports ref cell extension to Jam
+//  Supports ref cell extension to Jam
   class OpBang extends UnOp {
   public static final OpBang ONLY = new OpBang();
   private OpBang() { super("!"); }
@@ -122,7 +121,7 @@ class OpRef extends UnOp {
     return v.forOpRef(this); 
   }
 }
-*/
+
 
 class BinOpPlus extends BinOp {
   public static final BinOpPlus ONLY = new BinOpPlus();
@@ -220,7 +219,7 @@ class OpOr extends BinOp {
   }
 }
 
-/* Supports the ref cell extension to Jam
+//Supports the ref cell extension to Jam
 class OpGets extends BinOp {
   public static final OpGets ONLY = new OpGets();
   private OpGets() { super("<-"); }
@@ -228,7 +227,7 @@ class OpGets extends BinOp {
     return v.forOpGets(this); 
   }
 }
-*/
+
 
 /* UnOpApp is a Term because it does not need enclosing parentheses when appearing in a binary expression */
 class UnOpApp implements Term {
@@ -318,22 +317,6 @@ class Let implements AST {
   public String toString() { 
     return "let " + ToString.toString(defs," ") + " in " + body; 
   }
-  
-  /* Commonly used non-essential methods */
-  /** Returns the vars that are locally defined in this Let. */
-  public Variable[] vars() {
-    int n = defs.length;
-    Variable[] vars = new Variable[n];
-    for(int i = 0; i < n; i++) { vars[i] = defs[i].lhs(); }
-    return vars;
-  }
-  /** Returns the exps that appear on the rhs of defs in this Let. */
-  public AST[] exps() {
-    int n = defs.length;
-    AST[] exps = new AST[n];
-    for(int i = 0; i < n; i++) { exps[i] = defs[i].rhs(); }
-    return exps;
-  }
 }  
 
 /** Def class representing a definition embedded inside a Let. */
@@ -347,6 +330,20 @@ class Def {
   
   public String toString() { return lhs + " := " + rhs + ";"; }
 }
+
+class Block implements AST {
+	  private AST[] exps;
+
+	  Block(AST[] e) { exps = e; }
+	  public AST[] exps() { return exps; }
+	  
+	  public <T> T accept(ASTVisitor<T> v) { return v.forBlock(this); }
+
+	  public String toString() {
+	      return "{" + ToString.toString(exps,"; ") + "}";
+	  }
+	}
+
 
 /** Dummy class containing an improved toString method for arrays. */
 class ToString {
